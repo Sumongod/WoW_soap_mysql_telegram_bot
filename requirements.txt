@@ -1,5 +1,4 @@
-logging
-asyncio
+aiogram==3.7.0
 requests
-mysql.connector
-aiogram
+mysql-connector-python
+python-dotenv
