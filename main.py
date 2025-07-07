@@ -6,6 +6,8 @@ import re
 import mysql.connector
 from datetime import datetime
 from html import escape
+import os
+from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, Router, types, F
 from aiogram.enums import ParseMode
@@ -16,17 +18,19 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 
 # === КОНФИГ ===
-TOKEN = "YOU_TOKEN_HERE"
-SOAP_URL = "http://127.0.0.1:7878/"
-SOAP_USER = "USER"
-SOAP_PASS = "PASSWORD"
-ADMIN_IDS = [ID_Telegram_admin]
+load_dotenv()
+
+TOKEN = os.getenv("TOKEN")
+SOAP_URL = os.getenv("SOAP_URL")
+SOAP_USER = os.getenv("SOAP_USER")
+SOAP_PASS = os.getenv("SOAP_PASS")
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(',') if x]
 
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "acore",
-    "password": "acore",
-    "database": "acore_auth"
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "acore"),
+    "password": os.getenv("DB_PASSWORD", "acore"),
+    "database": os.getenv("DB_DATABASE", "acore_auth")
 }
 
 # === ЛОГИ ===

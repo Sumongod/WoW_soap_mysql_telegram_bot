@@ -135,7 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+#.env  # comment to allow committing .env if needed
 .envrc
 .venv
 env/
