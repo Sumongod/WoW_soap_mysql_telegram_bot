@@ -64,6 +64,9 @@ class BanState(StatesGroup):
     bantime = State()
     reason = State()
 
+class UnbanState(StatesGroup):
+    character_name = State()
+
 # === SOAP ===
 def send_soap_command(command: str) -> str:
     headers = {'Content-Type': 'text/xml'}
@@ -401,8 +404,7 @@ async def handle_admin(msg: Message, state: FSMContext):
     buttons = [
         [KeyboardButton(text="Отправить письмо"), KeyboardButton(text="Отправить золото")],
         [KeyboardButton(text="Отправить предмет"), KeyboardButton(text="Забанить")],
-        [KeyboardButton(text="Кикнуть с сервера")],
-        [KeyboardButton(text="Отправить в тюрьму Альянса"), KeyboardButton(text="Отправить в тюрьму орды")],
+        [KeyboardButton(text="Кикнуть с сервера"), KeyboardButton(text="Разбанить")],
         [KeyboardButton(text="Открыть тикеты")],
         [KeyboardButton(text="Выполнить команду")]
     ]
@@ -420,6 +422,10 @@ async def handle_admin_choice(msg: Message, state: FSMContext):
     if action == "Забанить":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(BanState.character_name)
+        return
+    if action == "Разбанить":
+        await msg.answer("Введите имя персонажа:")
+        await state.set_state(UnbanState.character_name)
         return
     await msg.answer(f"Функция <b>{escape(action)}</b> пока не реализована.")
     await state.clear()
@@ -447,6 +453,13 @@ async def process_ban_reason(msg: Message, state: FSMContext):
     bantime = data.get("bantime")
     reason = msg.text.strip()
     result = send_soap_command(f"ban character {char_name} {bantime} {reason}")
+    await msg.answer(f"<pre>{escape(result)}</pre>")
+    await state.clear()
+
+@router.message(UnbanState.character_name)
+async def process_unban_character(msg: Message, state: FSMContext):
+    char_name = msg.text.strip()
+    result = send_soap_command(f"unban character {char_name}")
     await msg.answer(f"<pre>{escape(result)}</pre>")
     await state.clear()
 @router.message(AdminCommandState.command)
