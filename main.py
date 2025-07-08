@@ -84,6 +84,10 @@ class SendItemsState(StatesGroup):
     text = State()
     items = State()
 
+class RestartServerState(StatesGroup):
+    delay = State()
+    exit_code = State()
+
 # === SOAP ===
 def send_soap_command(command: str) -> str:
     headers = {'Content-Type': 'text/xml'}
@@ -422,7 +426,7 @@ async def handle_admin(msg: Message, state: FSMContext):
         [KeyboardButton(text="✉️ Отправить письмо"), KeyboardButton(text="💰 Отправить золото")],
         [KeyboardButton(text="🎁 Отправить предмет"), KeyboardButton(text="⛔ Забанить")],
         [KeyboardButton(text="👢 Кикнуть с сервера"), KeyboardButton(text="🔓 Разбанить")],
-        [KeyboardButton(text="🎫 Открыть тикеты")],
+        [KeyboardButton(text="🔄 Рестарт сервера")],
         [KeyboardButton(text="⌨️ Выполнить команду")]
     ]
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -455,6 +459,10 @@ async def handle_admin_choice(msg: Message, state: FSMContext):
     if action == "🔓 Разбанить":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(UnbanState.character_name)
+        return
+    if action == "🔄 Рестарт сервера":
+        await msg.answer("Введите задержку в секундах:")
+        await state.set_state(RestartServerState.delay)
         return
     await msg.answer(f"Функция <b>{escape(action)}</b> пока не реализована.")
     await state.clear()
@@ -573,6 +581,28 @@ async def process_send_items(msg: Message, state: FSMContext):
     text = data.get("text", "").replace('"', '\\"')
     items = msg.text.strip()
     cmd = f'send items {char_name} "{subject}" "{text}" {items}'
+    result = send_soap_command(cmd)
+    await msg.answer(f"<pre>{escape(result)}</pre>")
+    await state.clear()
+
+@router.message(RestartServerState.delay)
+async def process_restart_delay(msg: Message, state: FSMContext):
+    delay = msg.text.strip()
+    if not delay.isdigit():
+        await msg.answer("Введите число секунд:")
+        return
+    await state.update_data(delay=delay)
+    await msg.answer("Введите код завершения (по умолчанию 0):")
+    await state.set_state(RestartServerState.exit_code)
+
+@router.message(RestartServerState.exit_code)
+async def process_restart_exit_code(msg: Message, state: FSMContext):
+    exit_code = msg.text.strip()
+    if not exit_code.isdigit():
+        exit_code = "0"
+    data = await state.get_data()
+    delay = data.get("delay", "0")
+    cmd = f'server restart {delay} {exit_code}'
     result = send_soap_command(cmd)
     await msg.answer(f"<pre>{escape(result)}</pre>")
     await state.clear()
