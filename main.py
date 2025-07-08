@@ -325,10 +325,13 @@ async def handle_apply_service(msg: Message, state: FSMContext):
 @router.message(Command("start"))
 async def cmd_start(msg: Message):
     telegram_id = msg.from_user.id
-    is_registered = get_username_by_telegram_id(telegram_id) is not None
+    username = get_username_by_telegram_id(telegram_id)
 
-    if not is_registered:
+    if not username:
         buttons = [[KeyboardButton(text="📥 Регистрация")]]
+        greeting = (
+            "Добро Пожаловать в регистрационный бот игры World Of Warcraft на сервере WoWSeRVeR!"
+        )
     else:
         buttons = [
             [KeyboardButton(text="🔐 Смена пароля")],
@@ -338,9 +341,10 @@ async def cmd_start(msg: Message):
         ]
         if has_gm_access(telegram_id, 3):
             buttons[-1].append(KeyboardButton(text="🛠️ Админ панель"))
+        greeting = f"Добро Пожаловать снова {username}"
 
     reply_kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-    await msg.answer("Привет! Это бот WoWSeRVeR (set realmlist wowserver.ru) выберете действие:", reply_markup=reply_kb)
+    await msg.answer(greeting, reply_markup=reply_kb)
 
 @router.message(F.text == "📜 Мои персонажи")
 async def handle_my_chars(msg: Message):
