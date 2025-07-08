@@ -348,7 +348,10 @@ async def process_register_password(msg: Message, state: FSMContext):
     else:
         result = send_soap_command(f"account create {login} {password}")
         set_telegram_email(login, telegram_id)
-        await msg.answer(f"✅ Аккаунт создан:\n{escape(result)}")
+           match = re.search(r"Account created: (\S+)", result)
+        if match:
+            result = f"Аккаунт создан: {match.group(1)}"
+        await msg.answer(f"✅ {escape(result)}")
         await state.clear()
 
 @router.message(F.text == "🔐 Смена пароля")
