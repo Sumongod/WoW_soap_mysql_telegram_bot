@@ -419,11 +419,11 @@ async def handle_admin(msg: Message, state: FSMContext):
         await msg.answer("❌ У вас нет прав.")
         return
     buttons = [
-        [KeyboardButton(text="Отправить письмо"), KeyboardButton(text="Отправить золото")],
-        [KeyboardButton(text="Отправить предмет"), KeyboardButton(text="Забанить")],
-        [KeyboardButton(text="Кикнуть с сервера"), KeyboardButton(text="Разбанить")],
-        [KeyboardButton(text="Открыть тикеты")],
-        [KeyboardButton(text="Выполнить команду")]
+        [KeyboardButton(text="✉️ Отправить письмо"), KeyboardButton(text="💰 Отправить золото")],
+        [KeyboardButton(text="🎁 Отправить предмет"), KeyboardButton(text="⛔ Забанить")],
+        [KeyboardButton(text="👢 Кикнуть с сервера"), KeyboardButton(text="🔓 Разбанить")],
+        [KeyboardButton(text="🎫 Открыть тикеты")],
+        [KeyboardButton(text="⌨️ Выполнить команду")]
     ]
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     await msg.answer("Выберите действие:", reply_markup=kb)
@@ -432,27 +432,27 @@ async def handle_admin(msg: Message, state: FSMContext):
 @router.message(AdminPanelState.choice)
 async def handle_admin_choice(msg: Message, state: FSMContext):
     action = msg.text.strip()
-    if action == "Выполнить команду":
+    if action == "⌨️ Выполнить команду":
         await msg.answer("Введите SOAP команду:")
         await state.set_state(AdminCommandState.command)
         return
-    if action == "Отправить письмо":
+    if action == "✉️ Отправить письмо":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(SendMailState.character_name)
         return
-    if action == "Отправить золото":
+    if action == "💰 Отправить золото":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(SendMoneyState.character_name)
         return
-    if action == "Отправить предмет":
+    if action == "🎁 Отправить предмет":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(SendItemsState.character_name)
         return
-    if action == "Забанить":
+    if action == "⛔ Забанить":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(BanState.character_name)
         return
-    if action == "Разбанить":
+    if action == "🔓 Разбанить":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(UnbanState.character_name)
         return
