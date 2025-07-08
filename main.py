@@ -59,6 +59,11 @@ class ServiceState(StatesGroup):
     character_name = State()
     service_type = State()
 
+class BanState(StatesGroup):
+    character_name = State()
+    bantime = State()
+    reason = State()
+
 # === SOAP ===
 def send_soap_command(command: str) -> str:
     headers = {'Content-Type': 'text/xml'}
@@ -412,7 +417,37 @@ async def handle_admin_choice(msg: Message, state: FSMContext):
         await msg.answer("Введите SOAP команду:")
         await state.set_state(AdminCommandState.command)
         return
+    if action == "Забанить":
+        await msg.answer("Введите имя персонажа:")
+        await state.set_state(BanState.character_name)
+        return
     await msg.answer(f"Функция <b>{escape(action)}</b> пока не реализована.")
+    await state.clear()
+
+@router.message(BanState.character_name)
+async def process_ban_character(msg: Message, state: FSMContext):
+    await state.update_data(character_name=msg.text.strip())
+    await msg.answer("Введите время бана в секундах:")
+    await state.set_state(BanState.bantime)
+
+@router.message(BanState.bantime)
+async def process_ban_time(msg: Message, state: FSMContext):
+    bantime = msg.text.strip()
+    if not bantime.isdigit():
+        await msg.answer("Введите число секунд:")
+        return
+    await state.update_data(bantime=bantime)
+    await msg.answer("Введите причину бана:")
+    await state.set_state(BanState.reason)
+
+@router.message(BanState.reason)
+async def process_ban_reason(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    char_name = data.get("character_name")
+    bantime = data.get("bantime")
+    reason = msg.text.strip()
+    result = send_soap_command(f"ban character {char_name} {bantime} {reason}")
+    await msg.answer(f"<pre>{escape(result)}</pre>")
     await state.clear()
 @router.message(AdminCommandState.command)
 async def execute_admin_command(msg: Message, state: FSMContext):
