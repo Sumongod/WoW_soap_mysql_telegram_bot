@@ -214,54 +214,66 @@ def has_gm_access(telegram_id: int, level: int = 3) -> bool:
 router = Router()
 
 @router.message(F.text == "🛎 Услуги")
-async def handle_services(msg: Message):
+async def handle_services(msg: Message, state: FSMContext):
+    chars = get_characters_by_telegram_id(msg.from_user.id)
+    if not chars:
+        await msg.answer("❌ У вас нет персонажей или вы не зарегистрированы.")
+        return
+
+    buttons = [[KeyboardButton(text=name)] for name in chars]
+    kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    await msg.answer("Выберите персонажа:", reply_markup=kb)
+    await state.set_state(ServiceState.character_name)
+
+@router.message(ServiceState.character_name)
+async def handle_service_menu(msg: Message, state: FSMContext):
+    char_name = msg.text.strip()
+    if not is_character_owned_by_user(char_name, msg.from_user.id):
+        await msg.answer("❌ Этот персонаж не принадлежит вашему аккаунту.")
+        await state.clear()
+        return
+
+    await state.update_data(character_name=char_name)
+
     buttons = [
         [KeyboardButton(text="🔁 Смена пола"), KeyboardButton(text="🔄 Смена фракции")],
         [KeyboardButton(text="🧑‍🎨 Смена внешности"), KeyboardButton(text="📍 Телепортация")]
     ]
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     await msg.answer("Выберите услугу:", reply_markup=kb)
+    await state.set_state(ServiceState.service_type)
 
-@router.message(F.text.in_(["🔁 Смена пола", "🔄 Смена фракции", "🧑‍🎨 Смена внешности", "📍 Телепортация"]))
-async def handle_service_selection(msg: Message, state: FSMContext):
+@router.message(ServiceState.service_type)
+async def handle_apply_service(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    char_name = data.get("character_name")
     service_map = {
         "🔁 Смена пола": "gender",
         "🔄 Смена фракции": "faction",
         "🧑‍🎨 Смена внешности": "customize",
         "📍 Телепортация": "teleport"
     }
-    service = service_map[msg.text]
-    await state.update_data(service=service)
-    await msg.answer("Введите имя персонажа:")
-    await state.set_state(ServiceState.character_name)
+    service = service_map.get(msg.text)
 
-@router.message(ServiceState.character_name)
-async def handle_apply_service(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    char_name = msg.text.strip()
-    service = data.get("service")
-
-    if not is_character_owned_by_user(char_name, msg.from_user.id):
-        await msg.answer("❌ Этот персонаж не принадлежит вашему аккаунту.")
+    if not service:
+        await msg.answer("❌ Неизвестная услуга.")
         await state.clear()
         return
 
-    service_map = {
+    if not char_name or not is_character_owned_by_user(char_name, msg.from_user.id):
+        await msg.answer("❌ Этот персонаж не принадлежит вашему аккаунту.")
+        await state.clear()
+        return
+    command_map = {
         "gender": "character customize",
         "faction": "character changefaction",
         "customize": "character customize",
         "teleport": "teleport name $home"
     }
 
-    command = service_map.get(service)
-    if not command:
-        await msg.answer("❌ Неизвестная услуга.")
-        await state.clear()
-        return
-
+    command = command_map.get(service)
     full_command = (
-        f"teleport name {char_name} $home" if service == "teleport"
-        else f"{command} {char_name}"
+        f"teleport name {char_name} $home" if service == "teleport" else f"{command} {char_name}"
     )
 
     result = send_soap_command(full_command)
