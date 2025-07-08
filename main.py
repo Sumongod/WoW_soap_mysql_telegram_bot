@@ -286,8 +286,10 @@ async def cmd_start(msg: Message):
             [KeyboardButton(text="🔐 Смена пароля")],
             [KeyboardButton(text="👥 Онлайн игроки")],
             [KeyboardButton(text="📜 Мои персонажи")],
-            [KeyboardButton(text="🛎 Услуги"), KeyboardButton(text="🛠️ Админ панель")]
+            [KeyboardButton(text="🛎 Услуги")]
         ]
+        if has_gm_access(telegram_id, 3):
+            buttons[-1].append(KeyboardButton(text="🛠️ Админ панель"))
 
     reply_kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     await msg.answer("Привет! Это бот WoWSeRVeR (set realmlist wowserver.ru) выберете действие:", reply_markup=reply_kb)
