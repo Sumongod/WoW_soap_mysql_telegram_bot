@@ -65,7 +65,24 @@ class BanState(StatesGroup):
     reason = State()
 
 class UnbanState(StatesGroup):
+
     character_name = State()
+class SendMailState(StatesGroup):
+    character_name = State()
+    subject = State()
+    text = State()
+
+class SendMoneyState(StatesGroup):
+    character_name = State()
+    subject = State()
+    text = State()
+    amount = State()
+
+class SendItemsState(StatesGroup):
+    character_name = State()
+    subject = State()
+    text = State()
+    items = State()
 
 # === SOAP ===
 def send_soap_command(command: str) -> str:
@@ -419,6 +436,18 @@ async def handle_admin_choice(msg: Message, state: FSMContext):
         await msg.answer("Введите SOAP команду:")
         await state.set_state(AdminCommandState.command)
         return
+    if action == "Отправить письмо":
+        await msg.answer("Введите имя персонажа:")
+        await state.set_state(SendMailState.character_name)
+        return
+    if action == "Отправить золото":
+        await msg.answer("Введите имя персонажа:")
+        await state.set_state(SendMoneyState.character_name)
+        return
+    if action == "Отправить предмет":
+        await msg.answer("Введите имя персонажа:")
+        await state.set_state(SendItemsState.character_name)
+        return
     if action == "Забанить":
         await msg.answer("Введите имя персонажа:")
         await state.set_state(BanState.character_name)
@@ -460,6 +489,91 @@ async def process_ban_reason(msg: Message, state: FSMContext):
 async def process_unban_character(msg: Message, state: FSMContext):
     char_name = msg.text.strip()
     result = send_soap_command(f"unban character {char_name}")
+    await msg.answer(f"<pre>{escape(result)}</pre>")
+    await state.clear()
+@router.message(SendMailState.character_name)
+async def process_mail_name(msg: Message, state: FSMContext):
+    await state.update_data(character_name=msg.text.strip())
+    await msg.answer("Введите тему письма:")
+    await state.set_state(SendMailState.subject)
+
+@router.message(SendMailState.subject)
+async def process_mail_subject(msg: Message, state: FSMContext):
+    await state.update_data(subject=msg.text.strip())
+    await msg.answer("Введите текст письма:")
+    await state.set_state(SendMailState.text)
+
+@router.message(SendMailState.text)
+async def process_send_mail(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    char_name = data.get("character_name")
+    subject = data.get("subject", "").replace('"', '\\"')
+    text = msg.text.strip().replace('"', '\\"')
+    cmd = f'send mail {char_name} "{subject}" "{text}"'
+    result = send_soap_command(cmd)
+    await msg.answer(f"<pre>{escape(result)}</pre>")
+    await state.clear()
+
+@router.message(SendMoneyState.character_name)
+async def process_money_name(msg: Message, state: FSMContext):
+    await state.update_data(character_name=msg.text.strip())
+    await msg.answer("Введите тему письма:")
+    await state.set_state(SendMoneyState.subject)
+
+@router.message(SendMoneyState.subject)
+async def process_money_subject(msg: Message, state: FSMContext):
+    await state.update_data(subject=msg.text.strip())
+    await msg.answer("Введите текст письма:")
+    await state.set_state(SendMoneyState.text)
+
+@router.message(SendMoneyState.text)
+async def process_money_text(msg: Message, state: FSMContext):
+    await state.update_data(text=msg.text.strip())
+    await msg.answer("Введите количество золота:")
+    await state.set_state(SendMoneyState.amount)
+
+@router.message(SendMoneyState.amount)
+async def process_send_money(msg: Message, state: FSMContext):
+    if not msg.text.strip().isdigit():
+        await msg.answer("Введите число золота:")
+        return
+    data = await state.get_data()
+    char_name = data.get("character_name")
+    subject = data.get("subject", "").replace('"', '\\"')
+    text = data.get("text", "").replace('"', '\\"')
+    amount = msg.text.strip()
+    cmd = f'send money {char_name} "{subject}" "{text}" {amount}'
+    result = send_soap_command(cmd)
+    await msg.answer(f"<pre>{escape(result)}</pre>")
+    await state.clear()
+
+@router.message(SendItemsState.character_name)
+async def process_items_name(msg: Message, state: FSMContext):
+    await state.update_data(character_name=msg.text.strip())
+    await msg.answer("Введите тему письма:")
+    await state.set_state(SendItemsState.subject)
+
+@router.message(SendItemsState.subject)
+async def process_items_subject(msg: Message, state: FSMContext):
+    await state.update_data(subject=msg.text.strip())
+    await msg.answer("Введите текст письма:")
+    await state.set_state(SendItemsState.text)
+
+@router.message(SendItemsState.text)
+async def process_items_text(msg: Message, state: FSMContext):
+    await state.update_data(text=msg.text.strip())
+    await msg.answer("Введите предметы (id[:кол-во] через пробел):")
+    await state.set_state(SendItemsState.items)
+
+@router.message(SendItemsState.items)
+async def process_send_items(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    char_name = data.get("character_name")
+    subject = data.get("subject", "").replace('"', '\\"')
+    text = data.get("text", "").replace('"', '\\"')
+    items = msg.text.strip()
+    cmd = f'send items {char_name} "{subject}" "{text}" {items}'
+    result = send_soap_command(cmd)
     await msg.answer(f"<pre>{escape(result)}</pre>")
     await state.clear()
 @router.message(AdminCommandState.command)
