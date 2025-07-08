@@ -52,6 +52,9 @@ class PasswordChangeState(StatesGroup):
 class AdminCommandState(StatesGroup):
     command = State()
 
+class AdminPanelState(StatesGroup):
+    choice = State()
+
 class ServiceState(StatesGroup):
     character_name = State()
     service_type = State()
@@ -390,9 +393,27 @@ async def handle_admin(msg: Message, state: FSMContext):
     if not has_gm_access(msg.from_user.id, 3):
         await msg.answer("❌ У вас нет прав.")
         return
-    await msg.answer("Введите SOAP команду:")
-    await state.set_state(AdminCommandState.command)
+    buttons = [
+        [KeyboardButton(text="Отправить письмо"), KeyboardButton(text="Отправить золото")],
+        [KeyboardButton(text="Отправить предмет"), KeyboardButton(text="Забанить")],
+        [KeyboardButton(text="Кикнуть с сервера")],
+        [KeyboardButton(text="Отправить в тюрьму Альянса"), KeyboardButton(text="Отправить в тюрьму орды")],
+        [KeyboardButton(text="Открыть тикеты")],
+        [KeyboardButton(text="Выполнить команду")]
+    ]
+    kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    await msg.answer("Выберите действие:", reply_markup=kb)
+    await state.set_state(AdminPanelState.choice)
 
+@router.message(AdminPanelState.choice)
+async def handle_admin_choice(msg: Message, state: FSMContext):
+    action = msg.text.strip()
+    if action == "Выполнить команду":
+        await msg.answer("Введите SOAP команду:")
+        await state.set_state(AdminCommandState.command)
+        return
+    await msg.answer(f"Функция <b>{escape(action)}</b> пока не реализована.")
+    await state.clear()
 @router.message(AdminCommandState.command)
 async def execute_admin_command(msg: Message, state: FSMContext):
     result = send_soap_command(msg.text.strip())
