@@ -43,7 +43,8 @@ logging.basicConfig(
 
 # === FSM ===
 class RegState(StatesGroup):
-    credentials = State()
+    login = State()
+    password = State()
 
 class PasswordChangeState(StatesGroup):
     new_password = State()
@@ -310,29 +311,45 @@ async def handle_online_players(msg: Message):
 
 @router.message(F.text == "📥 Регистрация")
 async def handle_register(msg: Message, state: FSMContext):
-    await msg.answer("Введите логин и пароль через пробел:")
-    await state.set_state(RegState.credentials)
+    await msg.answer("Введите логин:")
+    await state.set_state(RegState.login)
 
-@router.message(RegState.credentials)
-async def process_register(msg: Message, state: FSMContext):
-    parts = msg.text.strip().split()
-    if len(parts) != 2:
-        await msg.answer("❌ Формат: логин пароль")
-        return
-
-    login, password = parts
+@router.message(RegState.login)
+async def process_register_login(msg: Message, state: FSMContext):
+    login = msg.text.strip()
     telegram_id = msg.from_user.id
     existing_login = get_username_by_telegram_id(telegram_id)
 
     if existing_login:
         await msg.answer(f"🔐 Вы уже зарегистрированы под логином <b>{existing_login}</b>.")
+        await state.clear()
+        return
+    if is_account_exists(login):
+        await msg.answer("❌ Логин уже занят. Введите другой логин:")
+        return
+    await state.update_data(login=login)
+    await msg.answer("Введите пароль:")
+    await state.set_state(RegState.password)
+
+@router.message(RegState.password)
+async def process_register_password(msg: Message, state: FSMContext):
+    password = msg.text.strip()
+    data = await state.get_data()
+    login = data.get("login")
+    telegram_id = msg.from_user.id
+    existing_login = get_username_by_telegram_id(telegram_id)
+
+    if existing_login:
+        await msg.answer(f"🔐 Вы уже зарегистрированы под логином <b>{existing_login}</b>.")
+        await state.clear()
     elif is_account_exists(login):
         await msg.answer("❌ Логин уже занят.")
+        await state.clear()
     else:
         result = send_soap_command(f"account create {login} {password}")
         set_telegram_email(login, telegram_id)
         await msg.answer(f"✅ Аккаунт создан:\n{escape(result)}")
-    await state.clear()
+        await state.clear()
 
 @router.message(F.text == "🔐 Смена пароля")
 async def handle_change_pass(msg: Message, state: FSMContext):
