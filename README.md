@@ -24,21 +24,32 @@ WoW_soap_mysql_telegram_bot – это телеграм‑бот, который
 
 ============================================
 
-Как запустить
-Создайте файл .env и укажите параметры подключения к Telegram, SOAP и MySQL. Пример содержимого:
+## Как запустить
 
-TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-SOAP_URL=http://127.0.0.1:7878/
-SOAP_USER=USER
-SOAP_PASS=PASSWORD
-DB_HOST=localhost
-DB_USER=acore
-DB_PASSWORD=acore
-DB_DATABASE=acore_auth
-Установите зависимости из requirements.txt:
+1. **Создайте файл `.env`** и укажите параметры подключения к Telegram, SOAP и MySQL.
+   Пример содержимого:
 
-pip install -r requirements.txt
-Запустите бота командой:
+   ```
+   TOKEN=YOUR_TELEGRAM_BOT_TOKEN
+   SOAP_URL=http://127.0.0.1:7878/
+   SOAP_USER=USER
+   SOAP_PASS=PASSWORD
+   DB_HOST=localhost
+   DB_USER=acore
+   DB_PASSWORD=acore
+   DB_DATABASE=acore_auth
+   ```
 
-python main.py
-После запуска будет выполнена функция main(), и бот начнёт опрашивать Telegram.
+2. **Установите зависимости** из `requirements.txt`:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Запустите бота** командой:
+
+   ```bash
+   python main.py
+   ```
+
+После запуска будет выполнена функция `main()`, и бот начнёт опрашивать Telegram.
