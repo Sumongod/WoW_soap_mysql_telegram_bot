@@ -173,7 +173,7 @@ def get_username_by_telegram_id(telegram_id: int) -> str | None:
         logging.error(f"MySQL lookup error: {e}")
         return None
 
-def get_characters_by_telegram_id(telegram_id: int) -> list[str]:
+def get_characters_by_telegram_id(telegram_id: int) -> list[tuple[str, int]]:
     try:
         conn_auth = mysql.connector.connect(**DB_CONFIG)
         cursor_auth = conn_auth.cursor()
@@ -189,11 +189,14 @@ def get_characters_by_telegram_id(telegram_id: int) -> list[str]:
         char_config["database"] = "acore_characters"
         conn_chars = mysql.connector.connect(**char_config)
         cursor_chars = conn_chars.cursor()
-        cursor_chars.execute("SELECT name FROM characters WHERE account = %s", (account_id,))
-        names = [row[0] for row in cursor_chars.fetchall()]
+        cursor_chars.execute(
+            "SELECT name, level FROM characters WHERE account = %s",
+            (account_id,)
+        )
+        chars = [(row[0], row[1]) for row in cursor_chars.fetchall()]
         conn_chars.close()
 
-        return names
+        return chars
     except Exception as e:
         logging.error(f"Ошибка при получении персонажей: {e}")
         return []
@@ -252,7 +255,7 @@ async def handle_services(msg: Message, state: FSMContext):
         await msg.answer("❌ У вас нет персонажей или вы не зарегистрированы.")
         return
 
-    buttons = [[KeyboardButton(text=name)] for name in chars]
+    buttons = [[KeyboardButton(text=name)] for name, _ in chars]
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     await msg.answer("Выберите персонажа:", reply_markup=kb)
     await state.set_state(ServiceState.character_name)
@@ -345,7 +348,8 @@ async def handle_my_chars(msg: Message):
     if not chars:
         await msg.answer("❌ У вас нет персонажей или вы не зарегистрированы.")
     else:
-        await msg.answer("👤 Ваши персонажи:\n" + "\n".join(f"• {name}" for name in chars))
+        lines = [f"• {name} (ур. {lvl})" for name, lvl in chars]
+        await msg.answer("👤 Ваши персонажи:\n" + "\n".join(lines))
 
 @router.message(F.text == "👥 Онлайн игроки")
 async def handle_online_players(msg: Message):
