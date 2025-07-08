@@ -270,7 +270,7 @@ async def handle_apply_service(msg: Message, state: FSMContext):
     elif "500" in result.lower():
         await msg.answer("❌ Внутренняя ошибка сервера. Попробуйте позже.")
     else:
-       await msg.answer(f"✅ Услуга применена к <b>{char_name}</b>:\n<pre>{escape(result)}</pre>")
+       await msg.answer(f"✅ Услуга применена к <b>{char_name}</b>.")
 
     await state.clear()
 
