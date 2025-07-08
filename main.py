@@ -391,9 +391,15 @@ async def execute_admin_command(msg: Message, state: FSMContext):
 async def main():
     print("🚀 Бот запущен...")
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher(storage=MemoryStorage())
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
     dp.include_router(router)
-    await dp.start_polling(bot)
+    
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
+        await storage.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
