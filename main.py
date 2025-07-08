@@ -10,8 +10,9 @@ import os
 from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, Router, types, F
+from aiogram.filters import Command
 from aiogram.enums import ParseMode
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -56,8 +57,6 @@ class ServiceState(StatesGroup):
     service_type = State()
 
 # === SOAP ===
-# Отправляет SOAP-команду к серверу и возвращает текст результата
-    # или сообщение об ошибке.
 def send_soap_command(command: str) -> str:
     headers = {'Content-Type': 'text/xml'}
     payload = f"""<?xml version="1.0" encoding="utf-8"?>
@@ -93,8 +92,6 @@ def send_soap_command(command: str) -> str:
         return f"❌ SOAP ошибка: {e}"
 
 # === PARSE INFO ===
-# Извлекает из SOAP-ответа количество игроков, персонажей и аптайм
-    # и возвращает отформатированную строку.
 def parse_server_info(result: str) -> str:
     players = re.search(r"Connected players:\s*(\d+)", result)
     characters = re.search(r"Characters in world:\s*(\d+)", result)
@@ -107,7 +104,6 @@ def parse_server_info(result: str) -> str:
     return f"{players_text}\n{chars_text}\n{uptime_text}"
 
 # === MYSQL ===
-# Проверяет, существует ли аккаунт с заданным логином в MySQL базе.
 def is_account_exists(username: str) -> bool:
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
@@ -120,7 +116,6 @@ def is_account_exists(username: str) -> bool:
         logging.error(f"MySQL check error: {e}")
         return False
 
-# Привязывает Telegram ID к аккаунту, записывая его в поле email в базе.
 def set_telegram_email(username: str, telegram_id: int):
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
@@ -134,7 +129,6 @@ def set_telegram_email(username: str, telegram_id: int):
     except Exception as e:
         logging.error(f"MySQL update error: {e}")
 
-# Получает логин аккаунта по Telegram ID из поля email.
 def get_username_by_telegram_id(telegram_id: int) -> str | None:
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
@@ -147,16 +141,122 @@ def get_username_by_telegram_id(telegram_id: int) -> str | None:
         logging.error(f"MySQL lookup error: {e}")
         return None
 
+def get_characters_by_telegram_id(telegram_id: int) -> list[str]:
+    try:
+        conn_auth = mysql.connector.connect(**DB_CONFIG)
+        cursor_auth = conn_auth.cursor()
+        cursor_auth.execute("SELECT id FROM account WHERE email = %s", (str(telegram_id),))
+        row = cursor_auth.fetchone()
+        conn_auth.close()
+
+        if not row:
+            return []
+
+        account_id = row[0]
+        char_config = DB_CONFIG.copy()
+        char_config["database"] = "acore_characters"
+        conn_chars = mysql.connector.connect(**char_config)
+        cursor_chars = conn_chars.cursor()
+        cursor_chars.execute("SELECT name FROM characters WHERE account = %s", (account_id,))
+        names = [row[0] for row in cursor_chars.fetchall()]
+        conn_chars.close()
+
+        return names
+    except Exception as e:
+        logging.error(f"Ошибка при получении персонажей: {e}")
+        return []
+
+def is_character_owned_by_user(char_name: str, telegram_id: int) -> bool:
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM account WHERE email = %s", (str(telegram_id),))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return False
+
+        account_id = row[0]
+        char_config = DB_CONFIG.copy()
+        char_config["database"] = "acore_characters"
+        conn_chars = mysql.connector.connect(**char_config)
+        cursor_chars = conn_chars.cursor()
+        cursor_chars.execute("SELECT COUNT(*) FROM characters WHERE name = %s AND account = %s", (char_name, account_id))
+        result = cursor_chars.fetchone()
+        conn_chars.close()
+
+        return result[0] > 0
+    except Exception as e:
+        logging.error(f"Ошибка при проверке владельца персонажа: {e}")
+        return False
+
 # === ХЕНДЛЕРЫ ===
 router = Router()
 
-reply_kb = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📥 Регистрация"), KeyboardButton(text="🔐 Смена пароля")],
-    [KeyboardButton(text="👥 Онлайн игроки")],
-    [KeyboardButton(text="🛎 Услуги"), KeyboardButton(text="🛠️ Админ панель")]
-], resize_keyboard=True)
+@router.message(F.text == "🛎 Услуги")
+async def handle_services(msg: Message):
+    buttons = [
+        [KeyboardButton(text="🔁 Смена пола"), KeyboardButton(text="🔄 Смена фракции")],
+        [KeyboardButton(text="🧑‍🎨 Смена внешности"), KeyboardButton(text="📍 Телепортация")]
+    ]
+    kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    await msg.answer("Выберите услугу:", reply_markup=kb)
 
-@router.message(F.text == "/start")
+@router.message(F.text.in_(["🔁 Смена пола", "🔄 Смена фракции", "🧑‍🎨 Смена внешности", "📍 Телепортация"]))
+async def handle_service_selection(msg: Message, state: FSMContext):
+    service_map = {
+        "🔁 Смена пола": "gender",
+        "🔄 Смена фракции": "faction",
+        "🧑‍🎨 Смена внешности": "customize",
+        "📍 Телепортация": "teleport"
+    }
+    service = service_map[msg.text]
+    await state.update_data(service=service)
+    await msg.answer("Введите имя персонажа:")
+    await state.set_state(ServiceState.character_name)
+
+@router.message(ServiceState.character_name)
+async def handle_apply_service(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    char_name = msg.text.strip()
+    service = data.get("service")
+
+    if not is_character_owned_by_user(char_name, msg.from_user.id):
+        await msg.answer("❌ Этот персонаж не принадлежит вашему аккаунту.")
+        await state.clear()
+        return
+
+    service_map = {
+        "gender": "character customize",
+        "faction": "character changefaction",
+        "customize": "character customize",
+        "teleport": "teleport name $home"
+    }
+
+    command = service_map.get(service)
+    if not command:
+        await msg.answer("❌ Неизвестная услуга.")
+        await state.clear()
+        return
+
+    full_command = (
+        f"teleport name {char_name} $home" if service == "teleport"
+        else f"{command} {char_name}"
+    )
+
+    result = send_soap_command(full_command)
+
+    if "does not exist" in result.lower():
+        await msg.answer("❌ Персонаж не найден.")
+    elif "500" in result.lower():
+        await msg.answer("❌ Внутренняя ошибка сервера. Попробуйте позже.")
+    else:
+       await msg.answer(f"✅ Услуга применена к <b>{char_name}</b>:\n<pre>{escape(result)}</pre>")
+
+    await state.clear()
+
+@router.message(Command("start"))
 async def cmd_start(msg: Message):
     telegram_id = msg.from_user.id
     is_registered = get_username_by_telegram_id(telegram_id) is not None
@@ -167,21 +267,34 @@ async def cmd_start(msg: Message):
         buttons = [
             [KeyboardButton(text="🔐 Смена пароля")],
             [KeyboardButton(text="👥 Онлайн игроки")],
+            [KeyboardButton(text="📜 Мои персонажи")],
             [KeyboardButton(text="🛎 Услуги"), KeyboardButton(text="🛠️ Админ панель")]
         ]
 
     reply_kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
     await msg.answer("Привет! Это бот WoWSeRVeR (set realmlist wowserver.ru) выберете действие:", reply_markup=reply_kb)
 
-# Начало процесса регистрации — ожидается ввод логина и пароля.
+@router.message(F.text == "📜 Мои персонажи")
+async def handle_my_chars(msg: Message):
+    chars = get_characters_by_telegram_id(msg.from_user.id)
+    if not chars:
+        await msg.answer("❌ У вас нет персонажей или вы не зарегистрированы.")
+    else:
+        await msg.answer("👤 Ваши персонажи:\n" + "\n".join(f"• {name}" for name in chars))
+
+@router.message(F.text == "👥 Онлайн игроки")
+async def handle_online_players(msg: Message):
+    result = send_soap_command("server info")
+    parsed = parse_server_info(result)
+    await msg.answer(parsed)
+
 @router.message(F.text == "📥 Регистрация")
 async def handle_register(msg: Message, state: FSMContext):
     await msg.answer("Введите логин и пароль через пробел:")
     await state.set_state(RegState.credentials)
 
 @router.message(RegState.credentials)
-async def process_registration(msg: Message, state: FSMContext):
+async def process_register(msg: Message, state: FSMContext):
     parts = msg.text.strip().split()
     if len(parts) != 2:
         await msg.answer("❌ Формат: логин пароль")
@@ -220,12 +333,6 @@ async def process_change_pass(msg: Message, state: FSMContext):
     await msg.answer(result)
     await state.clear()
 
-@router.message(F.text == "👥 Онлайн игроки")
-async def handle_online(msg: Message):
-    result = send_soap_command("server info")
-    parsed = parse_server_info(result)
-    await msg.answer(parsed)
-
 @router.message(F.text == "🛠️ Админ панель")
 async def handle_admin(msg: Message, state: FSMContext):
     if msg.from_user.id not in ADMIN_IDS:
@@ -240,68 +347,11 @@ async def execute_admin_command(msg: Message, state: FSMContext):
     await msg.answer(f"<pre>{escape(result)}</pre>")
     await state.clear()
 
-@router.message(F.text == "🛎 Услуги")
-async def show_services(msg: Message):
-    await msg.answer("Выберите услугу:", reply_markup=ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🔁 Смена пола"), KeyboardButton(text="🔄 Смена фракции")],
-            [KeyboardButton(text="🧑‍🎨 Смена внешности"), KeyboardButton(text="📍 Телепортация")]
-        ],
-        resize_keyboard=True
-    ))
-
-@router.message(F.text.in_(["🔁 Смена пола", "🔄 Смена фракции", "🧑‍🎨 Смена внешности", "📍 Телепортация"]))
-async def select_service(msg: Message, state: FSMContext):
-    service_map = {
-        "🔁 Смена пола": "gender",
-        "🔄 Смена фракции": "faction",
-        "🧑‍🎨 Смена внешности": "customize",
-        "📍 Телепортация": "teleport"
-    }
-    service = service_map.get(msg.text)
-    await state.update_data(service=service)
-    await state.set_state(ServiceState.character_name)
-    await msg.answer("Введите имя персонажа:")
-
-@router.message(ServiceState.character_name)
-async def apply_service(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    char_name = msg.text.strip()
-    service = data.get("service")
-
-    service_map = {
-        "gender": "character customize",
-        "faction": "character changefaction",
-        "customize": "character customize",
-        "teleport": "teleport name $home"
-    }
-
-    command = service_map.get(service)
-    if not command:
-        await msg.answer("❌ Неизвестная услуга.")
-        await state.clear()
-        return
-
-    result = send_soap_command(f"{command.replace('$home', '').strip()} {char_name} $home" if service == "teleport" else f"{command} {char_name}")
-
-    if "does not exist" in result.lower():
-        await msg.answer("❌ Персонаж не найден.")
-    elif "500" in result.lower():
-        await msg.answer("❌ Внутренняя ошибка сервера. Попробуйте позже.")
-    else:
-        await msg.answer(f"✅ Услуга применена к <b>{char_name}</b>:\n<pre>{escape(result)}</pre>")
-
-    await state.clear()
-
 # === ЗАПУСК ===
 async def main():
     print("🚀 Бот запущен...")
-    bot = Bot(
-        token=TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-    )
+    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
-    # Здесь регистрируются все хендлеры, так как логика вся в main.py
     dp.include_router(router)
     await dp.start_polling(bot)
 
