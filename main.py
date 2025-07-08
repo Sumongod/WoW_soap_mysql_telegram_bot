@@ -25,7 +25,6 @@ TOKEN = os.getenv("TOKEN")
 SOAP_URL = os.getenv("SOAP_URL")
 SOAP_USER = os.getenv("SOAP_USER")
 SOAP_PASS = os.getenv("SOAP_PASS")
-ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(',') if x]
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
@@ -191,6 +190,27 @@ def is_character_owned_by_user(char_name: str, telegram_id: int) -> bool:
         logging.error(f"Ошибка при проверке владельца персонажа: {e}")
         return False
 
+def has_gm_access(telegram_id: int, level: int = 3) -> bool:
+    """Check if user linked to telegram_id has gmlevel >= level."""
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM account WHERE email = %s", (str(telegram_id),))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return False
+        account_id = row[0]
+        cursor.execute(
+            "SELECT gmlevel FROM account_access WHERE id = %s", (account_id,)
+        )
+        access = cursor.fetchone()
+        conn.close()
+        return access is not None and int(access[0]) >= level
+    except Exception as e:
+        logging.error(f"MySQL admin check error: {e}")
+        return False
+
 # === ХЕНДЛЕРЫ ===
 router = Router()
 
@@ -335,7 +355,7 @@ async def process_change_pass(msg: Message, state: FSMContext):
 
 @router.message(F.text == "🛠️ Админ панель")
 async def handle_admin(msg: Message, state: FSMContext):
-    if msg.from_user.id not in ADMIN_IDS:
+    if not has_gm_access(msg.from_user.id, level=3):
         await msg.answer("❌ У вас нет прав.")
         return
     await msg.answer("Введите SOAP команду:")
