@@ -341,7 +341,7 @@ async def cmd_start(msg: Message):
         ]
         if has_gm_access(telegram_id, 3):
             buttons[-1].append(KeyboardButton(text="🛠️ Админ панель"))
-        greeting = f"Добро Пожаловать снова {username}"
+        greeting = f"Добро Пожаловать снова {username}!"
 
     reply_kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     await msg.answer(greeting, reply_markup=reply_kb)
