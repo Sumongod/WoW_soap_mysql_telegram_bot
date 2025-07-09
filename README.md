@@ -49,7 +49,7 @@ WoW_soap_mysql_telegram_bot – это телеграм‑бот, который
 3. **Запустите бота** командой:
 
    ```bash
-   python main.py
+   python3 main.py
    ```
 
 После запуска будет выполнена функция `main()`, и бот начнёт опрашивать Telegram.
